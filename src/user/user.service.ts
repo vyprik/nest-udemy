@@ -6,6 +6,8 @@ import { Repository } from 'typeorm';
 import { sign } from 'jsonwebtoken';
 import { JWT_SECRET } from '../config';
 import { UserResponseInterface } from './types/userResponse.interface';
+import { LoginUserDto } from './dto/loginUser.dto';
+import { compare } from 'bcrypt';
 
 @Injectable()
 export class UserService {
@@ -23,13 +25,13 @@ export class UserService {
       username: createUserDto.username,
     })
 
-    if(userByEmail || userByUsername) {
-      throw new HttpException('Email or username are taken', HttpStatus.UNPROCESSABLE_ENTITY)
+    if (userByEmail || userByUsername) {
+      throw new HttpException('Email or username are taken', HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
     const newUser = new UserEntity();
     Object.assign(newUser, createUserDto);
-    console.log('newUser:', newUser);
+    // console.log('newUser:', newUser);
     return await this.userRepository.save(newUser);
   }
 
@@ -48,5 +50,37 @@ export class UserService {
         token: this.generateJwt(user),
       },
     };
+  }
+
+  // async loginUser(loginUserDto: LoginUserDto): Promise<UserResponseInterface> {
+  async loginUser(loginUserDto: LoginUserDto): Promise<UserEntity> {
+    const user = await this.userRepository.findOne({
+      email: loginUserDto.email,
+    }, {
+      select: ['id', 'username', 'email', 'bio', 'image', 'password'],
+    });
+
+    console.log('USER:', user, 'loginUserDto:', loginUserDto);
+
+    if (user) {
+      const match = await compare(loginUserDto.password, user.password);
+      console.log('match:', match);
+
+      if (match) {
+        delete user.password;
+
+        return user;
+        // return {
+        //   user: {
+        //     ...user,
+        //     token: this.generateJwt(user),
+        //   },
+        // };
+      }
+
+      throw new HttpException('Password not matched', HttpStatus.UNAUTHORIZED)
+    }
+
+    throw new HttpException('User not found', HttpStatus.UNPROCESSABLE_ENTITY)
   }
 }
